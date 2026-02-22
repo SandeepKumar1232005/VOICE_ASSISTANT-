@@ -1,0 +1,1 @@
+Add-Type -AssemblyName System.Runtime.WindowsRuntime; [Windows.Devices.Radios.Radio,Windows.System.Devices,ContentType=WindowsRuntime] | Out-Null; $task = [Windows.Devices.Radios.Radio]::GetRadiosAsync().AsTask(); $task.Wait(); $radios = $task.Result; foreach ($r in $radios) { Write-Output "$($r.Name) - $($r.Kind)" }

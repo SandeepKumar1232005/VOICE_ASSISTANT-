@@ -1,39 +1,36 @@
-import subprocess
-import base64
 import os
+import asyncio
+from winsdk.windows.devices.radios import Radio, RadioState
 
 class BluetoothManager:
+    def __init__(self):
+        pass
+
+    async def _toggle_bluetooth(self, enable):
+        try:
+            radios = await Radio.get_radios_async()
+            bt_radio = next((r for r in radios if r.kind.name == 'BLUETOOTH'), None)
+            
+            if bt_radio:
+                target_state = RadioState.ON if enable else RadioState.OFF
+                await bt_radio.set_state_async(target_state)
+                return True, "Bluetooth radio state updated."
+            else:
+                return False, "No Bluetooth radio found on this system."
+        except Exception as e:
+            return False, f"WinRT error: {e}"
+
     def set_bluetooth_state(self, enable=True):
         """
         Toggles Windows Bluetooth state. 
         Will try WinRT radio first, then fall back to opening settings if hardware is misconfigured.
         """
-        state_str = "On" if enable else "Off"
+        success, msg = asyncio.run(self._toggle_bluetooth(enable))
         
-        ps_script = f'''
-        Add-Type -AssemblyName System.Runtime.WindowsRuntime
-        [Windows.Devices.Radios.Radio,Windows.System.Devices,ContentType=WindowsRuntime] | Out-Null
-        $radios = [Windows.Devices.Radios.Radio]::GetRadiosAsync().GetResults()
-        $bt = $radios | Where-Object {{ $_.Kind -eq "Bluetooth" }}
-        if ($bt) {{
-            $bt.SetStateAsync("{state_str}").GetResults()
-        }} else {{
-            Write-Error "No Bluetooth radio found"
-        }}
-        '''
-        
-        try:
-            encoded_cmd = base64.b64encode(ps_script.encode('utf-16le')).decode('utf-8')
-            result = subprocess.run(["powershell", "-ExecutionPolicy", "Bypass", "-EncodedCommand", encoded_cmd], 
-                                    capture_output=True, text=True)
-            
-            if result.returncode == 0:
-                action = "Enabled" if enable else "Disabled"
-                return True, f"{action} Bluetooth."
-            else:
-                # Fallback: Just open the settings page so the user can do it
-                os.system("start ms-settings:bluetooth")
-                return True, "I opened the Bluetooth settings for you."
-                
-        except Exception as e:
-            return False, f"Bluetooth error: {e}"
+        if success:
+            action = "Enabled" if enable else "Disabled"
+            return True, f"{action} Bluetooth."
+        else:
+            # Fallback: Just open the settings page so the user can do it manually
+            os.system("start ms-settings:bluetooth")
+            return True, "I opened the Bluetooth settings for you."
