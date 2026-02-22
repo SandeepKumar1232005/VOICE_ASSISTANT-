@@ -1,0 +1,7 @@
+{
+    "launch_shortcuts": {
+        "calc": "calculator",
+        "browser": "chrome",
+        "editor": "vs code"
+    }
+}

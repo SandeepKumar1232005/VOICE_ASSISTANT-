@@ -1,0 +1,9 @@
+{
+    "assistant_name": "Jarvis",
+    "wake_words": [
+        "jarvis"
+    ],
+    "voice_rate": 175,
+    "voice_volume": 1.0,
+    "language": "en"
+}
