@@ -8,6 +8,7 @@ from system_control.bluetooth import BluetoothManager
 from system_control.airplane import AirplaneModeManager
 from productivity.scheduler import Scheduler
 import time
+import winsound
 
 class VoiceAssistant:
     def __init__(self):
@@ -107,6 +108,8 @@ class VoiceAssistant:
             while True:
                 # 1. Listen for wake word
                 if self.listener.listen_for_wake_word():
+                    # Play a short beep to indicate it's awake and listening
+                    winsound.Beep(1000, 200)
                     self.response.speak("Yes?")
                     
                     # 2. Listen for command
