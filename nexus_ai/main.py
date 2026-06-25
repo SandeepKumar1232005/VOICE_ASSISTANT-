@@ -39,6 +39,16 @@ from nexus_ai.agents.productivity_agent import ProductivityAgent
 from nexus_ai.agents.ai_agent import AIAgent
 from nexus_ai.agents.memory_agent import MemoryAgent
 from nexus_ai.agents.security_agent import SecurityAgent
+from nexus_ai.agents.workflow_agent import WorkflowAgent
+from nexus_ai.agents.document_agent import DocumentAgent
+from nexus_ai.agents.coding_agent import CodingAgent
+from nexus_ai.agents.monitor_agent import MonitorAgent
+from nexus_ai.agents.plugin_agent import PluginAgent
+from nexus_ai.agents.learning_agent import LearningAgent
+from nexus_ai.agents.privacy_agent import PrivacyAgent
+from nexus_ai.services.suggestion_engine import SuggestionEngine
+from nexus_ai.services.settings_manager import SettingsManager
+from nexus_ai.api.server import run_server, manager
 
 logger = get_logger("Nexus")
 
@@ -114,8 +124,33 @@ class NexusAssistant:
         # 10. Memory Agent
         self.memory_agent = MemoryAgent(self.db)
 
-        # 11. Security Agent
+        # 11. Workflow Agent
+        self.workflow_agent = WorkflowAgent(self.db)
+
+        # 12. Document Agent
+        self.document_agent = DocumentAgent(self.nemotron)
+
+        # 13. Coding Agent
+        self.coding_agent = CodingAgent(self.nemotron)
+
+        # 14. Monitor Agent
+        self.monitor_agent = MonitorAgent(self.db)
+        
+        # 15. Plugin Agent
+        self.plugin_agent = PluginAgent()
+        
+        # 16. Learning Agent
+        self.learning_agent = LearningAgent(self.db)
+
+        # 17. Privacy Agent
+        self.privacy_agent = PrivacyAgent()
+
+        # 18. Security Agent
         self.security_agent = SecurityAgent(self.db)
+
+        # ─── Background Services ───────────────────────────────
+        self.settings_manager = SettingsManager()
+        self.suggestion_engine = SuggestionEngine(self.db, self.tts.speak)
 
         # ─── Task Router Setup ─────────────────────────────────
         self.router = TaskRouter()
@@ -126,7 +161,18 @@ class NexusAssistant:
         self.router.register_agent("ProductivityAgent", self.productivity_agent)
         self.router.register_agent("AIAgent", self.ai_agent)
         self.router.register_agent("MemoryAgent", self.memory_agent)
+        self.router.register_agent("WorkflowAgent", self.workflow_agent)
+        self.router.register_agent("DocumentAgent", self.document_agent)
+        self.router.register_agent("CodingAgent", self.coding_agent)
+        self.router.register_agent("MonitorAgent", self.monitor_agent)
+        self.router.register_agent("PluginAgent", self.plugin_agent)
+        self.router.register_agent("LearningAgent", self.learning_agent)
+        self.router.register_agent("PrivacyAgent", self.privacy_agent)
         self.router.register_security_agent(self.security_agent)
+
+        # ─── API & UI Server ───────────────────────────────────
+        logger.info("Starting API Server...")
+        self.server_thread = run_server(self, port=8000)
 
         # ─── Ready ─────────────────────────────────────────────
         logger.info("=" * 60)
@@ -165,6 +211,9 @@ class NexusAssistant:
         """
         if not command_text:
             return
+
+        # Broadcast user command back to UI if it came from voice
+        asyncio.create_task(manager.broadcast({"event": "user_command", "text": command_text}))
 
         logger.info(f"Processing command: '{command_text}'")
 
@@ -210,8 +259,12 @@ class NexusAssistant:
 
             # Step 5: Speak the response
             self.tts.speak(response)
+            
+            # Broadcast to UI
+            asyncio.create_task(manager.broadcast({"event": "response", "text": response}))
         else:
             self.tts.speak("Done.")
+            asyncio.create_task(manager.broadcast({"event": "response", "text": "Done."}))
 
     def run(self):
         """

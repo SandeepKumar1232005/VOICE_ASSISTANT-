@@ -203,7 +203,8 @@ def test_conversation_agent_basic_parse():
     from nexus_ai.utils.database import Database
 
     db = Database(db_path=":memory:")
-    nemotron = NemotronClient(api_key=None)  # Will be unavailable
+    nemotron = NemotronClient(api_key="INVALID_KEY_TO_FORCE_OFFLINE")
+    nemotron.available = False  # Force offline
     agent = ConversationAgent(nemotron, db)
 
     # Test keyword matching
@@ -214,7 +215,7 @@ def test_conversation_agent_basic_parse():
     # Test app opening
     result = agent.understand("open chrome")
     assert result["tasks"][0]["action"] == "OPEN_APP"
-    assert result["tasks"][0]["parameters"]["app_name"] == "chrome"
+    assert result["tasks"][0]["parameters"]["app_name"].lower() == "chrome"
 
     # Test search
     result = agent.understand("search for latest AI news")

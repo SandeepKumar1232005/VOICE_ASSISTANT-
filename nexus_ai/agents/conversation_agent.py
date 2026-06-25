@@ -90,6 +90,33 @@ Your job is to analyze the user's spoken command and output a STRUCTURED JSON re
 - REMEMBER — Store user preference. Parameters: {"key": "...", "value": "..."}
 - RECALL — Recall stored info. Parameters: {"key": "..."}
 
+### Workflows
+- EXECUTE_WORKFLOW — Run a predefined or custom workflow. Parameters: {"name": "...", "trigger": "..."}
+  Available workflows: Coding Mode, Study Mode, Movie Mode, Meeting Mode, Gaming Mode, Travel Mode
+  Example: "Start coding mode" → EXECUTE_WORKFLOW with name="Coding Mode"
+- CREATE_WORKFLOW — Create a custom workflow. Parameters: {"name": "...", "trigger": "...", "description": "...", "steps": [{"action": "...", "parameters": {...}}]}
+  Example: "Create a workflow called College Mode that opens Chrome, Gmail and my Notes folder"
+- LIST_WORKFLOWS — List all available workflows
+- DELETE_WORKFLOW — Delete a workflow. Parameters: {"name": "..."}
+
+### Documents
+- READ_DOCUMENT — Read and process a document file. Parameters: {"path": "...", "operation": "summarize|explain|translate|rewrite|notes|qa|keypoints", "query": "..." (for qa)}
+  Supported formats: PDF, DOCX, TXT, Markdown
+
+### Coding
+- GIT_STATUS — Check git status of a project. Parameters: {"path": "..."}
+- GIT_PULL — Pull latest changes. Parameters: {"path": "..."}
+- GIT_COMMIT — Commit changes. Parameters: {"path": "...", "message": "..."}
+- CODE_REVIEW — Review code. Parameters: {"query": "...", "language": "..."}
+- PROJECT_SCAFFOLD — Generate project template. Parameters: {"name": "...", "type": "python|web|api", "path": "..."}
+
+### System Monitoring
+- SYSTEM_HEALTH — Get full system health report (CPU, RAM, Disk, Battery, Network)
+- CHECK_CPU — Get CPU usage
+- CHECK_GPU — Get GPU info
+- CHECK_NETWORK — Get network status
+- CHECK_TEMPERATURE — Get system temperature
+
 ## IMPORTANT Rules:
 1. One user command can map to MULTIPLE actions. Analyze the intent carefully.
    Example: "I'm going to college" → CHECK_WEATHER + CHECK_BATTERY + OPEN_APP(maps) + OPEN_APP(spotify)

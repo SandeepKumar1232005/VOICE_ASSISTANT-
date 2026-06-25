@@ -42,7 +42,12 @@ ACTION_TO_AGENT = {
     "SCREENSHOT": "SystemAgent",
     "SHUTDOWN": "SystemAgent", "RESTART": "SystemAgent",
     "SLEEP": "SystemAgent", "LOCK_SCREEN": "SystemAgent", "LOGOUT": "SystemAgent",
-    "CHECK_BATTERY": "SystemAgent", "CHECK_RAM": "SystemAgent", "CHECK_STORAGE": "SystemAgent",
+
+    # Monitor Agent
+    "SYSTEM_HEALTH": "MonitorAgent", "CHECK_CPU": "MonitorAgent",
+    "CHECK_RAM": "MonitorAgent", "CHECK_STORAGE": "MonitorAgent",
+    "CHECK_BATTERY": "MonitorAgent", "CHECK_NETWORK": "MonitorAgent",
+    "CHECK_TEMPERATURE": "MonitorAgent",
 
     # Application Agent
     "OPEN_APP": "ApplicationAgent", "CLOSE_APP": "ApplicationAgent",
@@ -71,6 +76,29 @@ ACTION_TO_AGENT = {
     "GENERATE_CODE": "AIAgent", "TRANSLATE": "AIAgent",
     "SUMMARIZE": "AIAgent", "DRAFT_EMAIL": "AIAgent",
     "CHECK_WEATHER": "AIAgent",
+
+    # Workflow Agent
+    "EXECUTE_WORKFLOW": "WorkflowAgent", "CREATE_WORKFLOW": "WorkflowAgent",
+    "LIST_WORKFLOWS": "WorkflowAgent", "DELETE_WORKFLOW": "WorkflowAgent",
+
+    # Document Agent
+    "READ_DOCUMENT": "DocumentAgent",
+
+    # Coding Agent
+    "GIT_STATUS": "CodingAgent", "GIT_PULL": "CodingAgent",
+    "GIT_COMMIT": "CodingAgent", "PROJECT_SCAFFOLD": "CodingAgent",
+    "CODE_REVIEW": "CodingAgent",
+    
+    # Plugin Agent
+    "LIST_PLUGINS": "PluginAgent", "RELOAD_PLUGINS": "PluginAgent",
+    "CALCULATE": "PluginAgent", "CHECK_WEATHER_PLUGIN": "PluginAgent",
+    
+    # Learning Agent
+    "GET_USER_HABITS": "LearningAgent", "TRACK_EVENT": "LearningAgent",
+
+    # Privacy Agent
+    "ENABLE_STEALTH_MODE": "PrivacyAgent", "DISABLE_STEALTH_MODE": "PrivacyAgent",
+    "CHECK_SCREEN_SHARING": "PrivacyAgent",
 
     # Memory Agent
     "REMEMBER": "MemoryAgent", "RECALL": "MemoryAgent",

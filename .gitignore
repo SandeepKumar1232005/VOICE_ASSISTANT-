@@ -24,3 +24,11 @@ datasets/
 *.log
 nexus_ai/logs/
 
+
+
+# Config files with secrets
+settings.json
+*settings.json
+
+# Database & model downloads
+nexus_ai/data/

@@ -1,8 +1,5 @@
 """
-Nexus AI — SQLite Database Wrapper
-
-Thread-safe SQLite operations for memory, productivity, and conversation persistence.
-Auto-creates tables on first initialization.
+Nexus AI Database Module
 """
 
 import sqlite3
@@ -17,7 +14,7 @@ logger = get_logger("Database")
 
 
 class Database:
-    """Thread-safe SQLite database wrapper for Nexus AI persistent storage."""
+    """Database wrapper for Nexus AI."""
 
     def __init__(self, db_path: Optional[str] = None):
         if db_path is None:
@@ -117,6 +114,46 @@ class Database:
                 action TEXT NOT NULL,
                 result TEXT NOT NULL,
                 details TEXT,
+                timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+
+        # Workflows (Phase 1 — Workflow Automation)
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS workflows (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                name TEXT NOT NULL UNIQUE,
+                trigger_phrase TEXT NOT NULL,
+                steps TEXT NOT NULL,
+                description TEXT,
+                enabled INTEGER DEFAULT 1,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+
+        # System snapshots (Phase 3 — Monitoring)
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS system_snapshots (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                cpu_percent REAL,
+                ram_percent REAL,
+                disk_percent REAL,
+                battery_percent REAL,
+                battery_plugged INTEGER,
+                network_up INTEGER,
+                temperature REAL,
+                timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+
+        # Productivity tracking (Phase 3 — Analytics)
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS productivity_tracking (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                event_type TEXT NOT NULL,
+                details TEXT,
+                duration_seconds INTEGER,
                 timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
         """)
@@ -370,6 +407,144 @@ class Database:
             "SELECT action, result, details, timestamp FROM security_log ORDER BY id DESC LIMIT ?",
             (limit,),
         ).fetchall()
+        return [dict(row) for row in rows]
+
+    # ─── Workflows ──────────────────────────────────────────────────
+
+    def save_workflow(self, name: str, trigger_phrase: str, steps: list, description: str = "") -> int:
+        """Save or update a workflow. Returns the workflow ID."""
+        import json as json_module
+        with self._lock:
+            conn = self._get_connection()
+            conn.execute(
+                """
+                INSERT INTO workflows (name, trigger_phrase, steps, description, updated_at)
+                VALUES (?, ?, ?, ?, ?)
+                ON CONFLICT(name) DO UPDATE SET
+                    trigger_phrase = excluded.trigger_phrase,
+                    steps = excluded.steps,
+                    description = excluded.description,
+                    updated_at = excluded.updated_at
+                """,
+                (name, trigger_phrase.lower(), json_module.dumps(steps), description,
+                 datetime.now().isoformat()),
+            )
+            conn.commit()
+            row = conn.execute("SELECT id FROM workflows WHERE name = ?", (name,)).fetchone()
+            logger.debug(f"Workflow saved: {name}")
+            return row["id"] if row else -1
+
+    def get_workflow(self, name: str) -> Optional[dict]:
+        """Get a workflow by name."""
+        import json as json_module
+        conn = self._get_connection()
+        row = conn.execute(
+            "SELECT id, name, trigger_phrase, steps, description, enabled, created_at FROM workflows WHERE name = ?",
+            (name,),
+        ).fetchone()
+        if row:
+            result = dict(row)
+            result["steps"] = json_module.loads(result["steps"])
+            return result
+        return None
+
+    def get_workflow_by_trigger(self, trigger: str) -> Optional[dict]:
+        """Find a workflow matching a trigger phrase."""
+        import json as json_module
+        conn = self._get_connection()
+        row = conn.execute(
+            "SELECT id, name, trigger_phrase, steps, description, enabled, created_at FROM workflows WHERE trigger_phrase = ? AND enabled = 1",
+            (trigger.lower().strip(),),
+        ).fetchone()
+        if row:
+            result = dict(row)
+            result["steps"] = json_module.loads(result["steps"])
+            return result
+        return None
+
+    def get_all_workflows(self) -> list[dict]:
+        """Get all workflows."""
+        import json as json_module
+        conn = self._get_connection()
+        rows = conn.execute(
+            "SELECT id, name, trigger_phrase, steps, description, enabled, created_at FROM workflows ORDER BY name"
+        ).fetchall()
+        results = []
+        for row in rows:
+            r = dict(row)
+            r["steps"] = json_module.loads(r["steps"])
+            results.append(r)
+        return results
+
+    def delete_workflow(self, name: str) -> bool:
+        """Delete a workflow by name. Returns True if found and deleted."""
+        with self._lock:
+            conn = self._get_connection()
+            cursor = conn.execute("DELETE FROM workflows WHERE name = ?", (name,))
+            conn.commit()
+            return cursor.rowcount > 0
+
+    def toggle_workflow(self, name: str, enabled: bool) -> bool:
+        """Enable or disable a workflow."""
+        with self._lock:
+            conn = self._get_connection()
+            cursor = conn.execute(
+                "UPDATE workflows SET enabled = ? WHERE name = ?",
+                (1 if enabled else 0, name),
+            )
+            conn.commit()
+            return cursor.rowcount > 0
+
+    # ─── System Monitoring ─────────────────────────────────────────
+
+    def save_system_snapshot(self, cpu: float, ram: float, disk: float,
+                             battery: float = None, plugged: bool = None,
+                             network: bool = True, temp: float = None):
+        """Save a system health snapshot."""
+        with self._lock:
+            conn = self._get_connection()
+            conn.execute(
+                """
+                INSERT INTO system_snapshots
+                (cpu_percent, ram_percent, disk_percent, battery_percent, battery_plugged, network_up, temperature)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+                """,
+                (cpu, ram, disk, battery, 1 if plugged else 0, 1 if network else 0, temp),
+            )
+            conn.commit()
+
+    def get_system_snapshots(self, limit: int = 50) -> list[dict]:
+        """Get recent system snapshots."""
+        conn = self._get_connection()
+        rows = conn.execute(
+            "SELECT * FROM system_snapshots ORDER BY id DESC LIMIT ?", (limit,)
+        ).fetchall()
+        return [dict(row) for row in rows]
+
+    # ─── Productivity Tracking ─────────────────────────────────────
+
+    def track_productivity_event(self, event_type: str, details: str = "", duration: int = 0):
+        """Log a productivity event (focus session, break, app usage, etc.)."""
+        with self._lock:
+            conn = self._get_connection()
+            conn.execute(
+                "INSERT INTO productivity_tracking (event_type, details, duration_seconds) VALUES (?, ?, ?)",
+                (event_type, details, duration),
+            )
+            conn.commit()
+
+    def get_productivity_events(self, event_type: str = None, limit: int = 100) -> list[dict]:
+        """Get productivity events, optionally filtered by type."""
+        conn = self._get_connection()
+        if event_type:
+            rows = conn.execute(
+                "SELECT * FROM productivity_tracking WHERE event_type = ? ORDER BY id DESC LIMIT ?",
+                (event_type, limit),
+            ).fetchall()
+        else:
+            rows = conn.execute(
+                "SELECT * FROM productivity_tracking ORDER BY id DESC LIMIT ?", (limit,)
+            ).fetchall()
         return [dict(row) for row in rows]
 
     # ─── Cleanup ───────────────────────────────────────────────────

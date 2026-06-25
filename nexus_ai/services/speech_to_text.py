@@ -9,8 +9,14 @@ import os
 import io
 import wave
 import tempfile
+import warnings
 import numpy as np
 from typing import Optional, Tuple
+
+# Suppress huggingface_hub warnings
+os.environ["HF_HUB_DISABLE_SYMLINKS_WARNING"] = "1"
+warnings.filterwarnings("ignore", category=UserWarning, module="huggingface_hub")
+warnings.filterwarnings("ignore", message=".*unauthenticated requests.*")
 
 from nexus_ai.utils.logger import get_logger
 from nexus_ai.utils.helpers import load_json_config

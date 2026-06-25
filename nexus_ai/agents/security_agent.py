@@ -51,6 +51,7 @@ class SecurityAgent(BaseAgent):
         or success=False if blocked/denied.
         """
         action = task.get("action", "UNKNOWN")
+        params = task.get("parameters", {})
         task_id = task.get("task_id", "???")
 
         # 1. Check if action is completely blocked
@@ -65,13 +66,18 @@ class SecurityAgent(BaseAgent):
             )
 
         # 2. Check if action requires confirmation
-        if action in self.require_confirmation or task.get("requires_confirmation", False):
-            return await self._request_confirmation(
-                task, voice_confirm_callback
-            )
+        requires_confirmation = (action in self.require_confirmation or task.get("requires_confirmation", False))
+        if requires_confirmation:
+            if not await self._request_confirmation(action, params, voice_confirm_callback, task):
+                self.db.log_security_event(action, "DENIED", "User denied execution or failed auth")
+                return AgentResult(
+                    success=False,
+                    message="Action cancelled. Security confirmation failed.",
+                    agent="SecurityAgent",
+                )
 
         # 3. Check for sensitive data in parameters
-        params_str = str(task.get("parameters", {}))
+        params_str = str(params)
         if contains_sensitive_data(params_str):
             security_log.warning(
                 f"SENSITIVE_DATA_DETECTED in task {task_id}: {action}"
@@ -89,69 +95,59 @@ class SecurityAgent(BaseAgent):
         )
 
     async def _request_confirmation(
-        self,
-        task: dict,
-        voice_confirm_callback=None,
-    ) -> AgentResult:
-        """
-        Request user confirmation for a dangerous action.
-        
-        Supports:
-        - Voice confirmation ("say yes to confirm")
-        - PIN confirmation
-        """
-        action = task.get("action", "UNKNOWN")
-        task_id = task.get("task_id", "???")
+        self, action: str, params: dict, confirm_callback, task: dict = None
+    ) -> bool:
+        """Ask the user to confirm a dangerous action, optionally requiring a PIN."""
+        if not confirm_callback:
+            logger.warning("No confirmation callback provided! Denying action.")
+            return False
 
+        task_id = task.get("task_id", "???") if task else "???"
+
+        # Determine level of security required
+        pin = self.security_pin
         action_display = action.lower().replace("_", " ")
-        logger.info(f"Requesting confirmation for: {action}")
+        
+        # Format a clear prompt
+        prompt = f"Warning: I am about to execute the {action_display} command. "
+        
+        if pin:
+            prompt += "This action requires authorization. Please say your security PIN."
+        else:
+            prompt += "Do you want me to proceed? Say yes or no."
+            
+        logger.info(f"Requesting security confirmation for {action}")
+        
+        try:
+            response = await confirm_callback(prompt)
+            if not response:
+                return False
+                
+            response = response.lower().strip()
 
-        # Try voice confirmation
-        if voice_confirm_callback:
-            try:
-                confirmation = await voice_confirm_callback(
-                    f"Are you sure you want to {action_display}? Say yes to confirm or no to cancel."
-                )
-
-                if confirmation and self._is_affirmative(confirmation):
-                    security_log.info(
-                        f"CONFIRMED (voice): {action} (task {task_id})"
-                    )
-                    self.db.log_security_event(
-                        action, "CONFIRMED", f"Voice confirmation for task {task_id}"
-                    )
-                    return AgentResult(
-                        success=True,
-                        message=f"Confirmed. Proceeding with {action_display}.",
-                        agent="SecurityAgent",
-                    )
+            if pin:
+                if pin in response:
+                    logger.info("PIN authenticated successfully.")
+                    security_log.info(f"CONFIRMED (PIN): {action} (task {task_id})")
+                    return True
                 else:
-                    security_log.info(
-                        f"DENIED (voice): {action} (task {task_id})"
-                    )
-                    self.db.log_security_event(
-                        action, "DENIED", f"User denied via voice for task {task_id}"
-                    )
-                    return AgentResult(
-                        success=False,
-                        message=f"Cancelled {action_display}.",
-                        agent="SecurityAgent",
-                    )
-            except Exception as e:
-                logger.error(f"Voice confirmation error: {e}")
-
-        # No voice callback available — deny by default for safety
-        security_log.warning(
-            f"DENIED (no confirmation method): {action} (task {task_id})"
-        )
-        self.db.log_security_event(
-            action, "DENIED", f"No confirmation method available for task {task_id}"
-        )
-        return AgentResult(
-            success=False,
-            message=f"I need your confirmation to {action_display}, but I couldn't verify. Cancelling for safety.",
-            agent="SecurityAgent",
-        )
+                    logger.warning("Invalid PIN provided.")
+                    security_log.warning(f"DENIED (Invalid PIN): {action} (task {task_id})")
+                    return False
+            else:
+                # Simple yes/no
+                if self._is_affirmative(response):
+                    logger.info(f"User confirmed action: {action}")
+                    security_log.info(f"CONFIRMED (voice): {action} (task {task_id})")
+                    return True
+                else:
+                    logger.info(f"User denied action: {action}")
+                    security_log.info(f"DENIED (voice): {action} (task {task_id})")
+                    return False
+                    
+        except Exception as e:
+            logger.error(f"Voice confirmation error: {e}")
+            return False
 
     def _is_affirmative(self, text: str) -> bool:
         """Check if the user's response is an affirmative confirmation."""

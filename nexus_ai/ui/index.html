@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Nexus AI Companion</title>
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+    <div id="companion-app" class="companion-container">
+        <!-- Header -->
+        <header class="app-header">
+            <div class="logo">
+                <div class="pulse-ring"></div>
+                <div class="core-orb"></div>
+            </div>
+            <h2>Nexus AI</h2>
+            <div class="status-indicator online"></div>
+        </header>
+
+        <!-- Main Chat Area -->
+        <main class="chat-area" id="chat-area">
+            <div class="message system-message">
+                Hello! I am Nexus, your AI assistant. Say my name to wake me up, or type a command below.
+            </div>
+        </main>
+
+        <!-- Input Area -->
+        <footer class="input-area">
+            <input type="text" id="command-input" placeholder="Type a command..." autocomplete="off">
+            <button id="send-btn" aria-label="Send">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <path d="M2.01 21L23 12L2.01 3L2 10L17 12L2 14L2.01 21Z" fill="currentColor"/>
+                </svg>
+            </button>
+        </footer>
+    </div>
+    <script src="js/main.js"></script>
+</body>
+</html>
