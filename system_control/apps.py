@@ -1,7 +1,7 @@
 import os
 import subprocess
 import json
-from AppOpener import open as app_open
+from AppOpener import open as app_open, close as app_close
 
 class AppLauncher:
     def __init__(self, config_file="config/commands.json"):
@@ -68,3 +68,40 @@ class AppLauncher:
                 return False, f"I couldn't find an application named {initial_app_name}."
         except Exception:
             return False, f"I couldn't find an application named {initial_app_name}."
+
+    def close(self, app_name):
+        """
+        Attempts to cleanly close an application by its name.
+        """
+        initial_app_name = app_name.lower().strip()
+        app_name = initial_app_name
+        
+        # Resolve alias if present
+        if app_name in self.shortcuts:
+            app_name = self.shortcuts[app_name]
+            
+        # Try AppOpener first
+        try:
+            app_close(app_name, match_closest=True, throw_error=True)
+            return True, f"Closing {initial_app_name}."
+        except Exception as e:
+            print(f"AppOpener close fallback: {e}")
+            
+        # Fallback 1: Direct taskkill assumption
+        # Note: 'taskkill /IM chrome.exe /F', 'taskkill /IM notepad.exe /F', etc.
+        try:
+            # Add .exe if user didn't say it
+            target_exe = app_name if app_name.endswith(".exe") else f"{app_name}.exe"
+            
+            # Use taskkill command
+            # /IM specifies the image name, /F forcefully terminates
+            ret = os.system(f"taskkill /IM {target_exe} /F /T")
+            
+            if ret == 0:
+                return True, f"Closing {initial_app_name}."
+            else:
+                # If that exact string didn't work, give an informative failure message
+                return False, f"I couldn't close {initial_app_name}."
+        except Exception as e:
+            print(f"Taskkill error: {e}")
+            return False, f"An error occurred while trying to close {initial_app_name}."

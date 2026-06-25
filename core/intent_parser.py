@@ -22,6 +22,7 @@ class IntentParser:
             "LOCK_SCREEN": ["lock screen", "lock the computer"],
             "SHUTDOWN": ["shut down", "turn off computer"],
             "LAUNCH_APP": ["open", "launch", "start"], 
+            "CLOSE_APP": ["close", "quit", "kill", "exit"],
             "SET_TIMER": ["set a timer for", "timer for"],
             "REMINDER": ["remind me to"]
         }
@@ -40,7 +41,7 @@ class IntentParser:
         for intent, phrases in self.intents.items():
             for phrase in phrases:
                 # Direct match
-                if phrase in text and intent not in ["LAUNCH_APP", "SET_TIMER", "REMINDER"]:
+                if phrase in text and intent not in ["LAUNCH_APP", "CLOSE_APP", "SET_TIMER", "REMINDER"]:
                     return {"intent": intent, "entities": {}}
                 
                 # Fuzzy match for typo resilience on direct commands
@@ -55,6 +56,12 @@ class IntentParser:
             app_match = re.search(r'(open|launch|start)\s+(.+)', text)
             if app_match:
                 return {"intent": "LAUNCH_APP", "entities": {"app_name": app_match.group(2).strip()}}
+                
+        # App Closing
+        if "close" in text or "quit" in text or "kill" in text or "exit" in text:
+            close_match = re.search(r'(close|quit|kill|exit)\s+(.+)', text)
+            if close_match:
+                return {"intent": "CLOSE_APP", "entities": {"app_name": close_match.group(2).strip()}}
                 
         # Reminders
         if "remind me to" in text:
@@ -75,7 +82,8 @@ class IntentParser:
                 }
 
         # Return best fuzzy match if high enough, else UNKNOWN
-        if highest_score > 85 and best_intent not in ["LAUNCH_APP", "SET_TIMER", "REMINDER"]:
+        if highest_score > 85 and best_intent not in ["LAUNCH_APP", "CLOSE_APP", "SET_TIMER", "REMINDER"]:
             return {"intent": best_intent, "entities": {}}
 
-        return {"intent": "UNKNOWN", "entities": {}}
+        # If it doesn't match any system command, send the entire text to the AI
+        return {"intent": "ASK_AI", "entities": {"query": text}}

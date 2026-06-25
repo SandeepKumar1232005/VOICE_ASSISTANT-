@@ -15,3 +15,12 @@ __pycache__/
 # Models
 model/
 *.zip
+*.pkl
+
+# AI Datasets
+datasets/
+
+# Logs
+*.log
+nexus_ai/logs/
+

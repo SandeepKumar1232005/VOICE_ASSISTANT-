@@ -1,0 +1,43 @@
+{
+    "require_confirmation": [
+        "SHUTDOWN",
+        "RESTART",
+        "SLEEP",
+        "LOGOUT",
+        "DELETE_FILE",
+        "DELETE_FOLDER",
+        "EMPTY_RECYCLE_BIN",
+        "FORMAT_DRIVE",
+        "UNINSTALL_APP",
+        "CHANGE_REGISTRY",
+        "DISABLE_ANTIVIRUS",
+        "MOVE_FILE",
+        "FACTORY_RESET"
+    ],
+    "blocked_actions": [
+        "FORMAT_DRIVE",
+        "CHANGE_REGISTRY",
+        "DISABLE_ANTIVIRUS",
+        "FACTORY_RESET",
+        "DELETE_SYSTEM_FILES"
+    ],
+    "confirmation_method": "voice",
+    "security_pin": null,
+    "never_expose": [
+        "api_keys",
+        "passwords",
+        "tokens",
+        "cookies",
+        "credentials",
+        "secrets",
+        "private_keys"
+    ],
+    "safe_directories": [
+        "~/Desktop",
+        "~/Documents",
+        "~/Downloads",
+        "~/Music",
+        "~/Pictures",
+        "~/Videos"
+    ]
+}

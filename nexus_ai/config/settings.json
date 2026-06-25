@@ -1,0 +1,32 @@
+{
+    "assistant_name": "Nexus",
+    "wake_words": ["nexus", "hey nexus"],
+    "nemotron_api_key": "",
+    "language": "en",
+    "supported_languages": ["en", "ta", "hi"],
+    "voice": {
+        "tts_engine": "pyttsx3",
+        "piper_model": "en_US-lessac-medium",
+        "rate": 175,
+        "volume": 1.0
+    },
+    "stt": {
+        "engine": "faster-whisper",
+        "model_size": "small",
+        "device": "cpu"
+    },
+    "security": {
+        "confirmation_method": "voice",
+        "pin": null
+    },
+    "user_directories": {
+        "desktop": "~/Desktop",
+        "documents": "~/Documents",
+        "downloads": "~/Downloads"
+    },
+    "conversation": {
+        "max_history": 20,
+        "nemotron_temperature": 0.6,
+        "nemotron_max_tokens": 1024
+    }
+}

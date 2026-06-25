@@ -1,6 +1,7 @@
 from core.listener import Listener
 from core.response_engine import ResponseEngine
 from core.intent_parser import IntentParser
+from core.ai_engine import GenerativeAI
 from system_control.apps import AppLauncher
 from system_control.system_ops import SystemOps
 from system_control.wifi import WiFiManager
@@ -9,6 +10,8 @@ from system_control.airplane import AirplaneModeManager
 from productivity.scheduler import Scheduler
 import time
 import winsound
+import json
+import os
 
 class VoiceAssistant:
     def __init__(self):
@@ -16,6 +19,19 @@ class VoiceAssistant:
         self.response = ResponseEngine()
         self.listener = Listener(wake_words=["jarvis"])
         self.parser = IntentParser()
+        
+        # Load API keys from settings
+        self.settings = {}
+        settings_path = os.path.join(os.path.dirname(__file__), "config", "settings.json")
+        try:
+            with open(settings_path, "r") as f:
+                self.settings = json.load(f)
+        except Exception as e:
+            print(f"Failed to load settings: {e}")
+            
+        # Initialize AI Engine
+        api_key = self.settings.get("gemini_api_key", "")
+        self.ai = GenerativeAI(api_key) if api_key else None
         
         # System modules
         self.app_launcher = AppLauncher()
@@ -86,6 +102,11 @@ class VoiceAssistant:
             if app_name:
                 success, msg = self.app_launcher.launch(app_name)
                 
+        elif intent == "CLOSE_APP":
+            app_name = entities.get("app_name")
+            if app_name:
+                success, msg = self.app_launcher.close(app_name)
+                
         elif intent == "SET_TIMER":
             amount = entities.get("amount")
             unit = entities.get("unit")
@@ -96,6 +117,15 @@ class VoiceAssistant:
             task = entities.get("task")
             if task:
                 success, msg = self.scheduler.set_reminder(task)
+                
+        elif intent == "ASK_AI":
+            query = entities.get("query")
+            if not self.ai:
+                msg = "I am not connected to the internet brain yet. Please add your Gemini API key to the settings form."
+            elif query:
+                print(f"[System] Asking Gemini AI: '{query}'...")
+                msg = self.ai.ask(query)
+                success = True
                 
         elif intent == "UNKNOWN":
             msg = "I didn't quite catch that. Could you repeat?"

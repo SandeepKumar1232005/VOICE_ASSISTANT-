@@ -1,0 +1,34 @@
+# Nexus AI — Dependencies
+# Install with: pip install -r requirements.txt
+
+# ─── Core ──────────────────────────────────────────────────────────
+openai>=1.30.0                      # NVIDIA Nemotron API (OpenAI-compatible)
+
+# ─── Speech ────────────────────────────────────────────────────────
+faster-whisper>=1.0.0               # Local STT (replaces Google STT)
+pyttsx3>=2.90                       # TTS (primary, simple and reliable)
+pyaudio>=0.2.14                     # Audio capture
+sounddevice>=0.4.6                  # Audio playback
+noisereduce>=3.0.0                  # Audio noise reduction
+vosk>=0.3.45                        # Offline wake word fallback
+
+# ─── System Control ───────────────────────────────────────────────
+screen-brightness-control>=0.22.0   # Brightness management
+psutil>=5.9.0                       # Process & system monitoring
+AppOpener>=1.7                      # App launching by name
+winsdk>=1.0.0b10                    # Windows SDK for radios (WiFi/BT)
+
+# ─── Audio / ML ────────────────────────────────────────────────────
+numpy>=1.26.0                       # Numerical operations
+librosa>=0.10.0                     # Audio feature extraction
+joblib>=1.3.0                       # Model loading (wake word)
+soundfile>=0.12.0                   # Audio file I/O
+
+# ─── Utilities ─────────────────────────────────────────────────────
+fuzzywuzzy>=0.18.0                  # Fuzzy string matching
+python-Levenshtein>=0.25.0          # Speed up fuzzywuzzy
+dateparser>=1.2.0                   # Natural language date parsing
+
+# ─── Optional (install separately if needed) ──────────────────────
+# piper-tts>=1.2.0                  # Natural TTS (optional, requires separate install)
+# speech_recognition>=3.10.0        # Google STT fallback
