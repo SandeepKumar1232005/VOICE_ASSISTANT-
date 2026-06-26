@@ -4,6 +4,7 @@ Nexus AI — Application Agent
 Opens, closes, restarts, and lists applications.
 """
 
+import os
 from nexus_ai.agents.base_agent import BaseAgent, AgentResult
 from nexus_ai.system.apps import AppController
 from nexus_ai.utils.logger import get_logger
@@ -25,7 +26,8 @@ class ApplicationAgent(BaseAgent):
 
     def __init__(self, db: Database = None):
         super().__init__("ApplicationAgent")
-        self.app_controller = AppController()
+        config_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "config", "settings.json")
+        self.app_controller = AppController(config_file=config_path)
         self.db = db
 
     async def execute(self, task: dict) -> AgentResult:

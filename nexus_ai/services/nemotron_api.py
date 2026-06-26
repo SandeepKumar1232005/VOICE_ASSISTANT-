@@ -36,8 +36,8 @@ class NemotronClient:
             api_key: NVIDIA API key. If None, loads from settings.json.
             model: Model identifier. Defaults to Nemotron Super.
         """
+        settings = load_json_config("settings.json")
         if api_key is None:
-            settings = load_json_config("settings.json")
             api_key = settings.get("nemotron_api_key", "")
 
         if not api_key:
@@ -50,7 +50,7 @@ class NemotronClient:
             base_url=self.BASE_URL,
             api_key=api_key,
         )
-        self.model = model or self.DEFAULT_MODEL
+        self.model = model or settings.get("nemotron_model", self.DEFAULT_MODEL)
         self.available = True
         logger.info(f"Nemotron client initialized with model: {self.model}")
 
@@ -184,7 +184,9 @@ class NemotronClient:
                     continue
 
         logger.error(f"Failed to parse JSON from response: {text[:200]}...")
-        raise ValueError(f"Could not extract valid JSON from API response")
+        error = ValueError(f"Could not extract valid JSON from API response")
+        error.raw_text = text
+        raise error
 
     def generate_response(
         self,

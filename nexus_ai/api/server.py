@@ -101,6 +101,16 @@ async def get_status():
     }
 
 
+@app.get("/api/perf")
+async def get_perf():
+    """Get the most recent pipeline performance metrics."""
+    from nexus_ai.utils.perf_timer import get_last_metrics
+    metrics = get_last_metrics()
+    if metrics:
+        return {"success": True, "metrics": metrics}
+    return {"success": False, "message": "No metrics available yet."}
+
+
 import os
 ui_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), "ui")
 app.mount("/", StaticFiles(directory=ui_dir, html=True), name="ui")

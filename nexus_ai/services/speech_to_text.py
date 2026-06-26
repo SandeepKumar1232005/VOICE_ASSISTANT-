@@ -36,11 +36,22 @@ class SpeechToTextService:
 
         self.engine = stt_config.get("engine", "faster-whisper")
         self.model_size = stt_config.get("model_size", "small")
-        self.device = stt_config.get("device", "cpu")
+        
+        # Auto-detect CUDA if not explicitly set
+        self.device = stt_config.get("device", "auto")
+        if self.device == "auto":
+            try:
+                import torch
+                self.device = "cuda" if torch.cuda.is_available() else "cpu"
+            except ImportError:
+                self.device = "cpu"
+
         self.language = settings.get("language", "en")
+        self.input_device_index = settings.get("input_device_index", None)
 
         self.whisper_model = None
         self._google_recognizer = None
+        self._noise_reduce = stt_config.get("noise_reduce", False)  # Off by default for speed
 
         self._init_engine()
 
@@ -130,22 +141,52 @@ class SpeechToTextService:
             # Save to temporary WAV file (faster-whisper needs a file path or array)
             segments, info = self.whisper_model.transcribe(
                 audio_np,
-                beam_size=5,
+                beam_size=1,  # Faster transcription (negligible accuracy loss on short commands)
                 vad_filter=True,
                 vad_parameters=dict(
                     min_silence_duration_ms=300,
-                    speech_pad_ms=200,
+                    speech_pad_ms=150,
                 ),
                 language=self.language if self.language != "auto" else None,
             )
 
-            # Collect all segments
+            # ─── Hallucination & Confidence Filtering ───
+            # Whisper can hallucinate during silence. `no_speech_prob` helps detect this.
+            if info and hasattr(info, "no_speech_prob") and info.no_speech_prob > 0.5:
+                logger.debug(f"High no_speech_prob ({info.no_speech_prob:.2f}), assuming silence.")
+                return "", None
+
+            # Collect all segments and check confidence
             text_parts = []
+            lowest_logprob = 0.0
+
             for segment in segments:
+                if segment.avg_logprob < lowest_logprob:
+                    lowest_logprob = segment.avg_logprob
+                
+                # Further hallucination protection per-segment
+                if hasattr(segment, "no_speech_prob") and segment.no_speech_prob > 0.6:
+                    continue
+                    
                 text_parts.append(segment.text.strip())
 
             transcribed_text = " ".join(text_parts).strip()
             detected_language = info.language if info else None
+
+            # Filter out known Whisper hallucinations
+            hallucinations = [
+                "thank you.", "thank you", "i hope you enjoyed this video.",
+                "i hope you enjoyed this video", "thanks for watching.",
+                "subscribe", "you", "amara.org", "by mr. doob"
+            ]
+            if transcribed_text.lower() in hallucinations:
+                logger.debug(f"Filtered hallucination: '{transcribed_text}'")
+                return "", None
+
+            # Low confidence check (-1.0 is a reasonable threshold for mumbled/unclear speech)
+            if lowest_logprob < -1.0 and transcribed_text:
+                logger.warning(f"Low confidence STT ({lowest_logprob:.2f}): '{transcribed_text}'")
+                return "[LOW_CONFIDENCE]", detected_language
 
             if transcribed_text:
                 logger.info(f"Transcribed: '{transcribed_text}' (lang: {detected_language})")
@@ -217,13 +258,16 @@ class SpeechToTextService:
         p = pyaudio.PyAudio()
 
         try:
-            stream = p.open(
-                format=FORMAT,
-                channels=CHANNELS,
-                rate=RATE,
-                input=True,
-                frames_per_buffer=CHUNK,
-            )
+            kwargs = {
+                "format": FORMAT,
+                "channels": CHANNELS,
+                "rate": RATE,
+                "input": True,
+                "frames_per_buffer": CHUNK,
+            }
+            if self.input_device_index is not None:
+                kwargs["input_device_index"] = self.input_device_index
+            stream = p.open(**kwargs)
         except Exception as e:
             logger.error(f"Cannot open microphone: {e}")
             return "", None
@@ -253,7 +297,7 @@ class SpeechToTextService:
                     frames.append(data)
                     if energy < 300:
                         silence_chunks += 1
-                        if silence_chunks > int(RATE / CHUNK * 1.5):  # 1.5 seconds of silence
+                        if silence_chunks > int(RATE / CHUNK * 0.8):  # 0.8 seconds of silence (faster cutoff)
                             break
                     else:
                         silence_chunks = 0
@@ -267,8 +311,9 @@ class SpeechToTextService:
 
         audio_data = b"".join(frames)
 
-        # Apply noise reduction if available
-        audio_data = self._reduce_noise(audio_data, RATE)
+        # Apply noise reduction only if enabled (off by default for speed)
+        if self._noise_reduce:
+            audio_data = self._reduce_noise(audio_data, RATE)
 
         return self.transcribe_audio(audio_data, RATE, CHANNELS)
 

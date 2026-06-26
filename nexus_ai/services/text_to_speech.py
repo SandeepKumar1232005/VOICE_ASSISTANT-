@@ -51,8 +51,10 @@ class TextToSpeechService:
             if self._init_piper():
                 return
             logger.warning("Piper TTS unavailable, falling back to pyttsx3")
-
-        self._init_pyttsx3()
+            self.engine_name = "pyttsx3"
+            
+        # Do not initialize pyttsx3 here on the main thread to avoid COM/threading hangs on Windows.
+        # It will be initialized on-demand in the worker thread.
 
     def _init_pyttsx3(self):
         """Initialize pyttsx3 engine."""
@@ -117,7 +119,10 @@ class TextToSpeechService:
             return
 
         logger.info(f"[Speaking]: {clean_text[:100]}{'...' if len(clean_text) > 100 else ''}")
-        print(f"\n  🔊 Nexus: {clean_text}\n")
+        try:
+            print(f"\n  🔊 Nexus: {clean_text}\n")
+        except UnicodeEncodeError:
+            print(f"\n  [Nexus]: {clean_text}\n")
 
         self._speech_queue.put(clean_text)
 

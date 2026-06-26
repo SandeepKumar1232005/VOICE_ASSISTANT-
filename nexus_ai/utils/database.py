@@ -26,6 +26,10 @@ class Database:
         self._local = threading.local()
         self._lock = threading.Lock()
 
+        # In-memory cache for frequently accessed data
+        self._memory_cache = None
+        self._memory_cache_dirty = True
+
         # Initialize schema
         self._initialize_tables()
         logger.info(f"Database initialized at {db_path}")
@@ -36,6 +40,7 @@ class Database:
             self._local.connection = sqlite3.connect(self.db_path)
             self._local.connection.row_factory = sqlite3.Row
             self._local.connection.execute("PRAGMA journal_mode=WAL")
+            self._local.connection.execute("PRAGMA synchronous=NORMAL")
             self._local.connection.execute("PRAGMA foreign_keys=ON")
         return self._local.connection
 
@@ -160,6 +165,15 @@ class Database:
 
         conn.commit()
 
+        # ─── Indexes for performance ───────────────────────────────
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_conv_history_id ON conversation_history(id DESC)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_reminders_notified ON reminders(notified, remind_at)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_app_usage_count ON app_usage(open_count DESC)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_security_log_id ON security_log(id DESC)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_system_snapshots_id ON system_snapshots(id DESC)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_productivity_type ON productivity_tracking(event_type, id DESC)")
+        conn.commit()
+
     # ─── User Memory Operations ────────────────────────────────────
 
     def set_memory(self, key: str, value: str, category: str = "preference"):
@@ -178,6 +192,7 @@ class Database:
                 (key, value, category, datetime.now().isoformat()),
             )
             conn.commit()
+            self._memory_cache_dirty = True  # Invalidate cache
             logger.debug(f"Memory set: {key} = {value} [{category}]")
 
     def get_memory(self, key: str) -> Optional[str]:
@@ -198,12 +213,17 @@ class Database:
         return [dict(row) for row in rows]
 
     def get_all_memories(self) -> list[dict]:
-        """Get all stored user memories."""
+        """Get all stored user memories (cached in-memory)."""
+        if not self._memory_cache_dirty and self._memory_cache is not None:
+            return self._memory_cache
+
         conn = self._get_connection()
         rows = conn.execute(
             "SELECT key, value, category, updated_at FROM user_memory ORDER BY category, key"
         ).fetchall()
-        return [dict(row) for row in rows]
+        self._memory_cache = [dict(row) for row in rows]
+        self._memory_cache_dirty = False
+        return self._memory_cache
 
     def delete_memory(self, key: str) -> bool:
         """Delete a memory entry. Returns True if found and deleted."""
@@ -211,6 +231,7 @@ class Database:
             conn = self._get_connection()
             cursor = conn.execute("DELETE FROM user_memory WHERE key = ?", (key,))
             conn.commit()
+            self._memory_cache_dirty = True  # Invalidate cache
             return cursor.rowcount > 0
 
     # ─── Conversation History ──────────────────────────────────────

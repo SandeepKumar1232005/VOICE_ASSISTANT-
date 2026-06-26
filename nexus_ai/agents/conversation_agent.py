@@ -196,37 +196,54 @@ class ConversationAgent(BaseAgent):
         # Build messages with context
         messages = self._build_messages(user_text)
 
-        try:
-            result = self.nemotron.chat_json(
-                messages=messages,
-                temperature=self.temperature,
-                max_tokens=self.max_tokens,
-            )
+        for attempt in range(2):
+            try:
+                result = self.nemotron.chat_json(
+                    messages=messages,
+                    temperature=self.temperature,
+                    max_tokens=self.max_tokens,
+                )
 
-            # Validate the response structure
-            result = self._validate_response(result)
+                # Validate the response structure
+                result = self._validate_response(result)
 
-            # Store assistant understanding in history
-            self.db.add_conversation(
-                "assistant",
-                result.get("response", "Understood."),
-            )
+                # Store assistant understanding in history
+                self.db.add_conversation(
+                    "assistant",
+                    result.get("response", "Understood."),
+                )
 
-            logger.info(
-                f"Understood: {result.get('intent_summary', 'Unknown')} "
-                f"→ {len(result.get('tasks', []))} task(s)"
-            )
-            return result
+                logger.info(
+                    f"Understood: {result.get('intent_summary', 'Unknown')} "
+                    f"→ {len(result.get('tasks', []))} task(s)"
+                )
+                return result
 
-        except Exception as e:
-            logger.error(f"NLU error: {e}")
-            return {
-                "understood": False,
-                "intent_summary": None,
-                "tasks": [],
-                "response": "I had trouble understanding that. Could you try again?",
-                "clarification": str(e),
-            }
+            except Exception as e:
+                raw_text = getattr(e, "raw_text", None)
+                if raw_text and attempt == 1:
+                    logger.warning("Falling back to raw text response after retries.")
+                    return {
+                        "understood": True,
+                        "intent_summary": "Conversational fallback",
+                        "tasks": [],
+                        "response": raw_text,
+                        "clarification": None,
+                    }
+                elif attempt == 0:
+                    logger.warning(f"NLU parse error on attempt {attempt+1}: {e}. Retrying...")
+                    # Remind the model to output JSON
+                    messages.append({"role": "system", "content": "You MUST respond in valid JSON format as instructed above."})
+                    continue
+                else:
+                    logger.error(f"NLU error: {e}")
+                    return {
+                        "understood": False,
+                        "intent_summary": None,
+                        "tasks": [],
+                        "response": "I had trouble understanding that. Could you try again?",
+                        "clarification": str(e),
+                    }
 
     def _build_messages(self, user_text: str) -> list[dict]:
         """Build the message list with system prompt, history, and user input."""

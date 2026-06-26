@@ -43,6 +43,9 @@ AGENT_COLORS = {
     "NemotronAPI": "BLUE",
     "STT": "GREEN",
     "TTS": "GREEN",
+    "IntentRouter": "CYAN",
+    "Perf": "MAGENTA",
+    "SuggestionEngine": "GRAY",
 }
 
 
@@ -97,6 +100,9 @@ class FileFormatter(logging.Formatter):
         return formatted
 
 
+import queue
+from logging.handlers import QueueHandler, QueueListener
+
 # ─── Log directory setup ───────────────────────────────────────────
 _LOG_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "logs")
 os.makedirs(_LOG_DIR, exist_ok=True)
@@ -104,15 +110,43 @@ os.makedirs(_LOG_DIR, exist_ok=True)
 # Track created loggers to avoid duplicate handlers
 _loggers: dict[str, logging.Logger] = {}
 
+# Shared async log queue and listener (non-blocking file I/O)
+_log_queue = queue.Queue(-1)  # Unlimited queue
+_queue_listener = None
+_file_handlers = []
+
+
+def _ensure_queue_listener():
+    """Start the shared queue listener (once) for async file logging."""
+    global _queue_listener
+    if _queue_listener is not None:
+        return
+
+    # Per-agent file handlers are added dynamically, but the shared log
+    # is always present
+    shared_log_file = os.path.join(_LOG_DIR, "nexus.log")
+    shared_handler = RotatingFileHandler(
+        shared_log_file,
+        maxBytes=10 * 1024 * 1024,  # 10MB
+        backupCount=5,
+        encoding="utf-8",
+    )
+    shared_handler.setLevel(logging.DEBUG)
+    shared_handler.setFormatter(FileFormatter("Nexus"))
+    _file_handlers.append(shared_handler)
+
+    _queue_listener = QueueListener(_log_queue, *_file_handlers, respect_handler_level=True)
+    _queue_listener.start()
+
 
 def get_logger(agent_name: str, level: int = logging.DEBUG) -> logging.Logger:
     """
     Get or create a logger for a specific agent.
     
     Each agent gets:
-    - Colored console output
-    - Rotating file log (5MB max, 5 backups)
-    - Shared nexus.log for aggregated view
+    - Colored console output (synchronous, fast)
+    - Rotating file log via async queue (non-blocking)
+    - Shared nexus.log via async queue (non-blocking)
     
     Args:
         agent_name: Name of the agent (used in log prefix and filename)
@@ -128,13 +162,13 @@ def get_logger(agent_name: str, level: int = logging.DEBUG) -> logging.Logger:
     logger.setLevel(level)
     logger.propagate = False  # Don't bubble up to root logger
 
-    # Console handler (colored)
+    # Console handler (colored, synchronous — it's fast enough)
     console_handler = logging.StreamHandler(sys.stdout)
     console_handler.setLevel(logging.INFO)
     console_handler.setFormatter(ColoredFormatter(agent_name))
     logger.addHandler(console_handler)
 
-    # Per-agent file handler
+    # Per-agent file handler (added to the async queue listener)
     agent_log_file = os.path.join(_LOG_DIR, f"{agent_name.lower()}.log")
     file_handler = RotatingFileHandler(
         agent_log_file,
@@ -144,19 +178,22 @@ def get_logger(agent_name: str, level: int = logging.DEBUG) -> logging.Logger:
     )
     file_handler.setLevel(logging.DEBUG)
     file_handler.setFormatter(FileFormatter(agent_name))
-    logger.addHandler(file_handler)
+    _file_handlers.append(file_handler)
 
-    # Shared aggregate log
-    shared_log_file = os.path.join(_LOG_DIR, "nexus.log")
-    shared_handler = RotatingFileHandler(
-        shared_log_file,
-        maxBytes=10 * 1024 * 1024,  # 10MB
-        backupCount=5,
-        encoding="utf-8",
-    )
-    shared_handler.setLevel(logging.DEBUG)
-    shared_handler.setFormatter(FileFormatter(agent_name))
-    logger.addHandler(shared_handler)
+    # Use QueueHandler for non-blocking file writes
+    queue_handler = QueueHandler(_log_queue)
+    queue_handler.setLevel(logging.DEBUG)
+    logger.addHandler(queue_handler)
+
+    # Ensure the listener is running
+    _ensure_queue_listener()
+
+    # Restart listener to pick up new handler
+    global _queue_listener
+    if _queue_listener is not None:
+        _queue_listener.stop()
+        _queue_listener = QueueListener(_log_queue, *_file_handlers, respect_handler_level=True)
+        _queue_listener.start()
 
     _loggers[agent_name] = logger
     return logger
